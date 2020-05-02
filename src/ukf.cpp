@@ -13,6 +13,8 @@ using std::vector;
  * Initializes Unscented Kalman filter
  */
 UKF::UKF() {
+  is_initialized_ = false;
+
   // if this is false, laser measurements will be ignored (except during init)
   use_laser_ = true;
 
@@ -62,20 +64,20 @@ UKF::UKF() {
   Hint: one or more values initialized above might be wildly off...
   */
 
-  lambda_ = 3 - n_x_;
+  lambda_ = 3 - n_x_;  //-2
 
   ///* Augmented state dimension
-  n_aug_ = n_x_ + 2;
+  n_aug_ = n_x_ + 2;  //7
 
   ///* Sigma points dimension
-  n_sig_ = 2 * n_aug_ + 1;
+  n_sig_ = 2 * n_aug_ + 1; //15
 
   // Initialize weights.
   weights_ = VectorXd(n_sig_);
-  weights_.fill(0.5 / (n_aug_ + lambda_));
-  weights_(0) = lambda_ / (lambda_ + n_aug_);
+  weights_.fill(0.5 / (n_aug_ + lambda_));  // 0.1
+  weights_(0) = lambda_ / (lambda_ + n_aug_);  //-0.4
 
-  // Initialize measurement noice covarieance matrix
+  // Initialize measurement noise covarieance matrix
   R_radar_ = MatrixXd(3, 3);
   R_radar_ << std_radr_*std_radr_, 0, 0,
               0, std_radphi_*std_radphi_, 0,
@@ -126,7 +128,7 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
   double dt = (meas_package.timestamp_ - time_us_) / 1000000.0;
   time_us_ = meas_package.timestamp_;
   // Prediction step
-  Prediction(dt);
+  Prediction(dt);   // predit by sigma points , get x_  and   P_
 
   if (meas_package.sensor_type_ == MeasurementPackage::RADAR && use_radar_) {
     UpdateRadar(meas_package);
@@ -151,13 +153,13 @@ void UKF::Prediction(double delta_t) {
 
   // 1. Generate sigma points.
   //create augmented mean vector
-  VectorXd x_aug = VectorXd(n_aug_);
-  x_aug.head(5) = x_;
+  VectorXd x_aug = VectorXd(n_aug_);  //n_aug_ = 7, x_aug is 7x1
+  x_aug.head(5) = x_; //x_ has five values(states)
   x_aug(5) = 0;
   x_aug(6) = 0;
 
   //create augmented state covariance
-  MatrixXd P_aug = MatrixXd(n_aug_, n_aug_);
+  MatrixXd P_aug = MatrixXd(n_aug_, n_aug_);  // P_aug is 7x7
   P_aug.fill(0.0);
   P_aug.topLeftCorner(n_x_,n_x_) = P_;
   P_aug(5,5) = std_a_*std_a_;
@@ -165,24 +167,24 @@ void UKF::Prediction(double delta_t) {
 
   // Creating sigma points.
   MatrixXd Xsig_aug = GenerateSigmaPoints(x_aug, P_aug, lambda_, n_sig_);
+
   // 2. Predict Sigma Points.
   Xsig_pred_ = PredictSigmaPoints(Xsig_aug, delta_t, n_x_, n_sig_, std_a_, std_yawdd_);
+
   // 3. Predict Mean and Covariance
   //predicted state mean
   x_ = Xsig_pred_ * weights_;
 
   //predicted state covariance matrix
   P_.fill(0.0);
-  for (int i = 0; i < n_sig_; i++) {  //iterate over sigma points
 
+  for (int i = 0; i < n_sig_; i++) {  //iterate over sigma points
     // state difference
     VectorXd x_diff = Xsig_pred_.col(i) - x_;
     //angle normalization
     NormalizeAngleOnComponent(x_diff, 3);
-
     P_ = P_ + weights_(i) * x_diff * x_diff.transpose() ;
   }
-
 }
 
 /**
@@ -271,8 +273,10 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   */
   // Radar measument dimension
   int n_z = 3;
+
   // 1. Predict measurement
   MatrixXd Zsig = MatrixXd(n_z, n_sig_);
+
   //transform sigma points into measurement space
   for (int i = 0; i < n_sig_; i++) {  //2n+1 simga points
 
@@ -326,11 +330,13 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
 
     //residual
     VectorXd z_diff = Zsig.col(i) - z_pred;
+
     //angle normalization
     NormalizeAngleOnComponent(z_diff, 1);
 
     // state difference
     VectorXd x_diff = Xsig_pred_.col(i) - x_;
+
     //angle normalization
     NormalizeAngleOnComponent(x_diff, 3);
 
